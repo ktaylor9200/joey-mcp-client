@@ -139,6 +139,12 @@ class McpClientService {
       _client = McpClient(
         Implementation(name: 'joey-mcp-client-flutter', version: '1.0.0'),
         options: McpClientOptions(
+          // Use the MCP 2025-11-25 initialize/session flow. The default
+          // profile prefers the 2026-07-28 stateless protocol, whose strict
+          // `_meta` key grammar rejects tool lists from real servers that
+          // use vendor keys like "openai/toolInvocation/invoking" (e.g. fal).
+          // Joey's session resumption is built on the stateful flow anyway.
+          protocol: McpProtocol.legacy,
           capabilities: ClientCapabilities(
             sampling: ClientCapabilitiesSampling(),
             roots: ClientCapabilitiesRoots(listChanged: true),
