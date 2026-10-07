@@ -35,6 +35,9 @@ class McpServerManager extends ChangeNotifier {
   /// Callback invoked when a server successfully connects.
   void Function(String serverName)? onServerConnected;
 
+  /// Called when a server fails to connect for a reason other than OAuth.
+  void Function(String serverName, String error)? onServerError;
+
   /// Load MCP servers for the given conversation from the database.
   Future<void> loadMcpServers(String conversationId) async {
     this.conversationId = conversationId;
@@ -262,6 +265,7 @@ class McpServerManager extends ChangeNotifier {
           e.toString().toLowerCase().contains('authentication')) {
         onServerNeedsOAuth?.call(server);
       }
+      onServerError?.call(server.name, e.toString());
     }
   }
 

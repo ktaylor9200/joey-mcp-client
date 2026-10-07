@@ -245,6 +245,14 @@ class McpOAuthService {
     _dio.options.receiveTimeout = const Duration(seconds: 30);
   }
 
+  /// RFC 8707 resource indicator for [serverUrl]. The MCP auth spec requires
+  /// clients to send this on authorization and token requests so the
+  /// authorization server issues a token bound to this MCP server. Prefer the
+  /// identifier the server advertises in its protected resource metadata.
+  String _resourceIndicator(String serverUrl, ProtectedResourceMetadata pr) {
+    return pr.resource.isNotEmpty ? pr.resource : serverUrl;
+  }
+
   /// Check if an MCP server requires OAuth authentication
   ///
   /// Makes an unauthenticated request to the server and checks for 401 response
@@ -599,6 +607,7 @@ class McpOAuthService {
         'state': state,
         'code_challenge': codeChallenge,
         'code_challenge_method': 'S256',
+        'resource': _resourceIndicator(serverUrl, prMetadata),
         if (scopeToRequest != null && scopeToRequest.isNotEmpty)
           'scope': scopeToRequest,
       },
@@ -630,9 +639,14 @@ class McpOAuthService {
     // Use client ID from pending state (ensures consistency with authorization request)
     final effectiveClientId = clientId ?? pendingState.clientId;
 
+    final prMetadata =
+        await discoverProtectedResourceMetadata(pendingState.resourceUrl);
+    final resource = _resourceIndicator(pendingState.resourceUrl, prMetadata);
+
     // Exchange code for tokens
     try {
       final requestData = {
+        'resource': resource,
         'grant_type': 'authorization_code',
         'code': authorizationCode,
         'redirect_uri': pendingState.redirectUri,
@@ -737,6 +751,7 @@ class McpOAuthService {
         data: {
           'grant_type': 'refresh_token',
           'refresh_token': refreshToken,
+          'resource': _resourceIndicator(serverUrl, prMetadata),
           'client_id': clientId ?? _defaultClientId,
           if (clientSecret != null) 'client_secret': clientSecret,
         },

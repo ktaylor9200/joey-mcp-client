@@ -1,0 +1,65 @@
+name: Build Android APK
+
+# Builds the free flavor under its own app ID (com.kaiserapps.joey.sideload)
+# so it installs alongside any Play Store version. Source builds have every
+# feature unlocked (JOEY_FREEMIUM defaults to false).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create signing key
+        # A throwaway key generated per run. Because it changes every run,
+        # installing a newer build means uninstalling Joey Sideload first.
+        run: |
+          keytool -genkeypair -v -noprompt \
+            -keystore android/app/sideload.jks \
+            -alias sideload -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass sideload -keypass sideload \
+            -dname "CN=Sideload Build"
+          cat > android/key.properties <<'EOF'
+          storeFile=sideload.jks
+          storePassword=sideload
+          keyAlias=sideload
+          keyPassword=sideload
+          EOF
+
+      - name: Give the build its own app ID and name
+        # Avoids clashing with either Play Store version (Joey or Joey Free).
+        run: |
+          sed -i 's/applicationId = "com.kaiserapps.joey.free"/applicationId = "com.kaiserapps.joey.sideload"/' android/app/build.gradle.kts
+          sed -i 's/manifestPlaceholders\["appName"\] = "Joey Lite"/manifestPlaceholders["appName"] = "Joey Sideload"/' android/app/build.gradle.kts
+          grep -q 'com.kaiserapps.joey.sideload' android/app/build.gradle.kts
+
+      - run: flutter pub get
+
+      - run: flutter build apk --release --flavor free
+
+      - name: Publish APK as a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          cp build/app/outputs/flutter-apk/app-free-release.apk "joey-lite-${TAG}.apk"
+          gh release create "$TAG" "joey-lite-${TAG}.apk" \
+            --title "Joey Lite ${TAG}" \
+            --notes "Sideload build from $(git rev-parse --short HEAD)." \
+            --prerelease

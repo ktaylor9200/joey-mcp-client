@@ -291,6 +291,18 @@ class _ChatScreenState extends State<ChatScreen>
         provider.addTransientMessage(connectedMessage);
       }
     };
+    _serverManager.onServerError = (serverName, error) {
+      if (mounted) {
+        final provider = context.read<ConversationProvider>();
+        provider.addTransientMessage(Message(
+          id: const Uuid().v4(),
+          conversationId: widget.conversation.id,
+          role: MessageRole.modelChange,
+          content: 'Failed to connect to $serverName: $error',
+          timestamp: DateTime.now(),
+        ));
+      }
+    };
     if (!reattached) {
       _serverManager.loadMcpServers(widget.conversation.id);
       _loadLocalTools(widget.conversation.id);
